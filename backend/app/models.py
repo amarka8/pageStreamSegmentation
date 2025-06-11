@@ -19,7 +19,6 @@ class Hero(SQLModel, table=True):
     # index not enabled
     accessibility: str | None = Field(default=None)
 
-# Code above omitted 👆
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
@@ -38,9 +37,8 @@ def get_session():
 
 """ 
 Since Depends(get_session) yields a session for each request,
-annotated is used to declare the yielded type as a class named Session
+annotated is used to declare the yielded type as a class named Session of type SessionDep
 """
-
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
@@ -55,3 +53,17 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+# submit data (pdf to ocr, itemize, and extract metadata)
+@app.post("/heroes")
+def create_db_obj(hero: Hero, session: SessionDep) -> Hero:
+    session.add(hero)
+    session.commit()
+    session.refresh(hero)
+    # why ???????
+    return hero
+
+
+# retrieve data (in our casee, we are retrieving metadata + PDF to serve to users)
+@app.get("/heroes")
+def get_db_obj(hero_id: int, session: SessionDep, offset: int, limit: Annotated[int, Query(le = 100)]) -> list[Hero]:
+    heroes = session.exec(select(Hero).where(Hero.id == hero_id).offset(offset).limit(limit)).all()
