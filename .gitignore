@@ -1,3 +1,4 @@
 .env
 deepseek_benchmark.csv
 evaluate.py
+data/
