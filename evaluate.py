@@ -119,6 +119,7 @@ def clean_entities(entity_list):
 
 def entity_recall_match(gt_list, bm_list, recall_threshold=0.70, fuzzy_threshold=60):
     gt_clean = clean_entities(gt_list)
+    print(gt_clean)
     bm_clean = clean_entities(bm_list)
 
     if not gt_clean:
