@@ -1,36 +1,38 @@
 from typing import Annotated, List
+import uvicorn
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlmodel import Field, Session, SQLModel, create_engine, select, Relationship
 from contextlib import asynccontextmanager
-from sqlalchemy import JSON, Column
 
+    
 
-# id, name, collection, title, people+orgs, location, description, date, subjects, accessibility
-class Doc(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(index=True)
-    collection: str = Field(index=True)
-    title: str = Field(index=True)
-    entities: list["PeopleOrgs"] = Relationship(back_populates="people_plus_orgs")
+"""
+TEAM TABLE
+id, name, collection, title, people+orgs, location, description, date, subjects, accessibility
+"""
+class DocBase(SQLModel):
+    collection: str | None = Field(index = True, default= None)
+    entities: str | None = Field(default=None) # separated by , or |
     # index not enabled on following 2
     # location: str | None = Field(default = None)
-    description: str = Field()
-    date: int | None = Field(default = None, index = True)
-    subject_lst: list["Subjects"] = Relationship(back_populates="subjects")
+    description: str | None = Field(default=None)
+    date: str | None = Field(default = None, index = True)  # expect 'YYYYMM'
+    subject_lst: str | None = Field(default=None) # separated by , or |
     # index not enabled
     accessibility: str | None = Field(default=None)
 
-class PeopleOrgs(SQLModel, table = True):
+# Actual data model
+class Doc(DocBase, table = True):
     id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(index = True)
-    people_plus_orgs: Doc | None = Relationship(back_populates="entities")
+    doc_name: str 
 
-class Subjects(SQLModel, table = True):
-    id: int | None = Field(default=None, primary_key=True)
-    name: str = Field(index = True)
-    subjects: Doc | None = Relationship(back_populates="subject_lst")
+# to be returned to API user
+class DocPublic(DocBase):
+    id: int
 
+class DocCreate(DocBase):
+    doc_name: str
 
 
 sqlite_file_name = "database.db"
@@ -38,12 +40,16 @@ sqlite_url = f"sqlite:///{sqlite_file_name}"
 
 # to ensure a single request can use multiple threads: MAKE SURE TO SERIALIZE WRITES
 connect_args = {"check_same_thread": False}
-engine = create_engine(sqlite_url, connect_args=connect_args)
+engine = create_engine(sqlite_url, echo= True, connect_args=connect_args)
 
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
+    # SQLModel.metadata.sess
 
+def drop_db_and_tables():
+    SQLModel.metadata.drop_all(engine)
+    
 def get_session():
     with Session(engine) as session:
         yield session
@@ -69,41 +75,42 @@ app = FastAPI(lifespan=lifespan)
 CRUD
 """
 
-# submit data (pdf to ocr, itemize, and extract metadata)
-@app.post("/heroes")
-def create_db_obj(hero: Doc, session: SessionDep) -> Doc:
-    session.add(hero)
+# submit data (pdf to ocr, itemize, and extract metadata) to update DB
+@app.post("/doc/", response_model=DocPublic)
+def create_db_obj(doc: DocCreate, session: SessionDep):
+    db_doc = Doc.model_validate(doc)
+    session.add(db_doc)
     session.commit()
-    session.refresh(hero)
+    session.refresh(db_doc)
     # why ???????
-    return hero
+    return db_doc
+
 
 # retrieve data (in our case, we are retrieving metadata + PDF to serve to users)
-@app.get("/heroes")
-def retrieve_db_objs(session: SessionDep, offset: int, limit: Annotated[int, Query(le = 100)]) -> list[Doc]:
-    heroes = session.exec(select(Doc).offset(offset).limit(limit)).all()
-    return heroes
+@app.get("/docs/", response_model= list[DocPublic])
+def retrieve_db_objs(session: SessionDep, offset: int, limit: Annotated[int, Query(le = 100)]):
+    docs = session.exec(select(Doc).offset(offset).limit(limit)).all()
+    return docs
 
 # retrieve one piece of data
-
-
-@app.get("/heroes/{hero_id}")
-def retrieve_db_objs(hero_id: int, session: SessionDep) -> Doc:
-    hero = session.exec(select(Doc).where(Doc.id == hero_id))
-    if not hero:
+@app.get("/doc/{doc_id}", response_model=DocPublic)
+def retrieve_db_obj(doc_id: int, session: SessionDep):
+    doc = session.exec(select(Doc).where(Doc.id == doc_id))
+    if not doc:
         raise HTTPException(404, "id not found")
-    return hero
+    return doc
 
 
-@app.delete("/heroes/{hero_id}")
-def remove_db_objs(hero_id: int, session: SessionDep) -> Doc:
-    hero = session.exec(select(Doc).where(Doc.id == hero_id))
-    if not hero:
+@app.delete("/doc/{doc_id}")
+def remove_db_objs(doc_id: int, session: SessionDep):
+    doc = session.exec(select(Doc).where(Doc.id == doc_id))
+    if not doc:
         raise HTTPException(404, "id not found")
-    session.delete(hero)
+    session.delete(doc)
     # FFLUSH / Msync type operation
     session.commit()
     return {"ok": True}
+
 
 
 
