@@ -23,7 +23,7 @@ def num_tokens_by_tiktoken(text: str) -> int:
     return len(enc.encode(text))
   
 
-def mistral_ocr(pdf_path) -> str:
+def mistral_ocr(pdf_path, client) -> str:
   # load file
   uploaded_pdf = client.files.upload(
       file={
@@ -55,19 +55,21 @@ def mistral_ocr(pdf_path) -> str:
       continue
     return "failed"
     
-  pdf_text = pdf_response.pages[0].markdown
+  # pdf_text = pdf_response.pages[0].markdown
   
-  markdown, markdown_display = get_combined_markdown(pdf_response)
-  return markdown, markdown_display
+  # markdown, markdown_display = get_combined_markdown(pdf_response)
+  # return markdown, markdown_display
   # print("--------")
   # print("num input tokens: ")
-  num_tokens = num_tokens_by_tiktoken(markdown)
+  # num_tokens = num_tokens_by_tiktoken(markdown)
   # print(num_tokens)
   # print("--------")
 
-  if(num_tokens > 123000):
-    print("num tokens too large")
-    return
+  # if(num_tokens > 123000):
+  #   print("num tokens too large")
+  #   return
+
+  return get_combined_markdown(pdf_response)
 
 
 def replace_images_in_markdown(markdown_str: str, images_dict: dict) -> str:
@@ -106,17 +108,18 @@ def replace_images_in_markdown(markdown_str: str, images_dict: dict) -> str:
 
 def get_combined_markdown(ocr_response: OCRResponse) -> str:
   markdowns: list[str] = []
-  markdownToDisplay: list[str] = []
+  # markdownToDisplay: list[str] = []
   for page in ocr_response.pages:
     image_data = {}
     for img in page.images:
       image_data[img.id] = img.image_base64
     markdowns.append(replace_images_in_markdown(page.markdown, image_data))
-    markdownToDisplay.append(replace_images_in_markdown_to_display(page.markdown, image_data))
+    # markdownToDisplay.append(replace_images_in_markdown_to_display(page.markdown, image_data))
   # print("done getting combined markdown")
   # print(markdowns)
 
-  return "\n\n".join(markdowns), "\n\n".join(markdownToDisplay)
+  # return "\n\n".join(markdowns), "\n\n".join(markdownToDisplay)
+  return markdowns
 
 
 """
